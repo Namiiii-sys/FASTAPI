@@ -1,55 +1,16 @@
 from pydantic import BaseModel, Field, create_model
-from typing import Annotated, Any, Dict, Type
+from typing import Annotated, Any, Dict, Type, Literal
 from fastapi import FastAPI, Depends, Header, Path, HTTPException, status
 from datetime import date
 
 app = FastAPI()
 
-# class ItemCreate(BaseModel):
-#     name: str
-#     price: float | None = None
-
-# async def get_db_session():
-#     print("DB session > start")
-#     session = {"data": {1:{"name":"Namita"}, 2:{"name":"Item_two"}}}
-#     try:
-#         yield session
-#     finally:
-#         print("DB session < teardown")
-
-# Dbsession = Annotated[dict, Depends(get_db_session)]   
-
-
-# async def get_user(token: Annotated[str | None, Header()]=None):
-#     print("Checking auth..")
-#     return {"username": "Test_user"}
-
-# CurrentUser = Annotated[dict, Depends(get_user)]
-
-# @app.get("/item/{item_id}")
-# async def read_item(item_id: Annotated[int, Path(ge=1)], db: Dbsession):
-#     print("reading items")
-#     if item_id not in db["data"]:
-#         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail = "Item is not present")
-#     return {"id": item_id, **db['data'][item_id]}
-
-
-# @app.post("/item")
-# async def create_item(
-#     item: ItemCreate,
-#     db: Dbsession,
-#     user: CurrentUser
-#     ):
-#     print(f"User {user['username']} creating item")
-#     new_id = max(db["data"].keys() or [0]) + 1
-#     db["data"][new_id] = item.model_dump()
-#     return {"id": new_id, **item.model_dump()}
 
 Category_definations = {
     1: {"name":"Laptop",
          "fields":{"cpu_type": (str,...), "ram_gb":(int,...)}},
     2: {"name":"T-shirts",
-        "fields":{"colour":(str,...), "size":(str, "M")}},
+        "fields":{"colour":(str,...), "size":(Literal['S','M','L','XL'], ...)}},
     3: {"name":"Equipment",
         "fields":{"voltage":(int,...), "warranty_Expires_on":(date, ...)}}
 }
@@ -96,3 +57,33 @@ async def create_dynamic_product(
        "message": "Product created successfully",
        "product": validate_product.model_dump()
    }
+
+PRODUCT_DATABASES = {
+    101: {"category_id": 1, "sku":"DELL-XPS-15", "price": 1899.00, "attributes":{"cpu_type":"Intel i9","ram_gb":256}},
+    102: {"category_id": 2, "sku":"PLAIN-WHITE-T", "price": 500.00, "attributes":{"colour":"Red","size":"XL"}},
+    103: {"category_id": 3, "sku":"CNC-MILL-01", "price": 75000.00, "attributes":{"voltage": 220,"warranty_expires_on":240506}}
+}
+
+@app.get("/products/{product_id}")
+async def get_product(product_id):
+    product_data = PRODUCT_DATABASES[int(product_id)]
+    if not product_id:
+        raise HTTPException(Status_code=404, detail="Product does not exist duh!")
+    category_id = product_data["category_id"]
+    ResponseModel = get_product_model_For_Category(category_id)
+
+    Response_Data = {
+        "sku": product_data["sku"],
+        "price":product_data["price"],
+        **product_data["attributes"]
+    }
+
+    try:
+        return ResponseModel(**Response_Data)
+    except Exception as err:
+        raise HTTPException(status_code=422, detail=f"{err}")
+    
+
+@app.get("/products", response_model = list[Dict[str, Any]])
+async def get_all_products():
+    return list(PRODUCT_DATABASES.values())
